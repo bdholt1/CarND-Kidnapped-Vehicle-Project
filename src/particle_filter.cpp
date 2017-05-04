@@ -17,7 +17,7 @@ using namespace std;
 
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
 
-    num_particles = 5;
+    num_particles = 100;
 
     default_random_engine gen;
     normal_distribution<double> x_init_dist(x, std[0]);
@@ -102,13 +102,16 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::ve
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[], 
         std::vector<LandmarkObs> observations, Map map_landmarks) {
 
-    double std_x = std_landmark[0];
-    double std_y = std_landmark[1];
+    const double std_x = std_landmark[0];
+    const double std_y = std_landmark[1];
+    const double scale = 0.5 / (M_PI * std_x * std_y);
+    weights.clear();
+
     for (int i = 0; i < num_particles; ++i)
     {
-        double particle_x = particles[i].x;
-        double particle_y = particles[i].y;
-        double particle_theta = particles[i].theta;
+        const double particle_x = particles[i].x;
+        const double particle_y = particles[i].y;
+        const double particle_theta = particles[i].theta;
 
         // gather all landmarks within sensor range
         vector<LandmarkObs> predicted_landmarks;
@@ -127,8 +130,8 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         vector<LandmarkObs> transformed_observations;
         for (int j = 0; j < observations.size(); ++j)
         {
-            double x = observations[j].x;
-            double y = observations[j].y;
+            const double x = observations[j].x;
+            const double y = observations[j].y;
             double transformed_x = x*cos(particle_theta) - y*sin(particle_theta);
             double transformed_y = x*sin(particle_theta) + y*cos(particle_theta);
             transformed_x += particle_x;
@@ -140,8 +143,8 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         dataAssociation(predicted_landmarks, transformed_observations);
 
         // update particle weight using multivariate gaussian
-        double scale = 0.5 / (M_PI * std_x * std_y);
-        double new_weight = 0.0;
+        
+        double new_weight = 1.0;
         for (auto obs: transformed_observations)
         {
             cout << obs.id << " " << obs.x << " " << obs.y << endl; 
@@ -149,21 +152,16 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
             LandmarkObs pred = predicted_landmarks[obs.id];
             double x_diff = pow(obs.x - pred.x, 2);
             double y_diff = pow(obs.y - pred.y, 2);
-            new_weight += scale * exp(-x_diff/(2*std_x*std_x) - y_diff/(2*std_y*std_y));
+            new_weight *= scale * exp(-x_diff/(2*std_x*std_x) - y_diff/(2*std_y*std_y));
         }
         cout << " reweighting particle " << i << " from " << particles[i].weight << " to " << new_weight << endl; 
         particles[i].weight = new_weight;
+        weights.push_back(new_weight);
         
     }
 }
 
 void ParticleFilter::resample() {
-
-    weights.clear();
-    for (int i = 0; i < num_particles; ++i)
-    {
-        weights.push_back(particles[i].weight);
-    }   
 
     default_random_engine gen;
     discrete_distribution<> distribution(weights.begin(), weights.end());
